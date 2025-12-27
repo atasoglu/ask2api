@@ -10,6 +10,20 @@ from dataclasses import dataclass
 
 API_KEY = os.getenv("OPENAI_API_KEY")
 ENV_VAR_PREFIX = "ASK2API_"
+TYPE_HINTS = {
+    "string": "string",
+    "str": "string",
+    "number": "number",
+    "int": "integer",
+    "integer": "integer",
+    "float": "number",
+    "bool": "boolean",
+    "boolean": "boolean",
+    "array": "array",
+    "list": "array",
+    "object": "object",
+    "dict": "object",
+}
 
 
 @dataclass
@@ -91,6 +105,66 @@ def get_version():
         return "dev"
 
 
+def convert_example_to_schema(example, _cache=None):
+    """Convert a JSON example to a JSON Schema with memoization."""
+    if _cache is None:
+        _cache = {}
+
+    # Use id() for memoization key to handle nested structures
+    cache_key = id(example)
+    if cache_key in _cache:
+        return _cache[cache_key]
+
+    if isinstance(example, dict):
+        schema = {
+            "type": "object",
+            "properties": {},
+            "required": list(example.keys()),
+            "additionalProperties": False,
+        }
+
+        for key, value in example.items():
+            if isinstance(value, str):
+                schema["properties"][key] = {
+                    "type": TYPE_HINTS.get(value.lower(), "string")
+                }
+            elif isinstance(value, bool):
+                schema["properties"][key] = {"type": "boolean"}
+            elif isinstance(value, int):
+                schema["properties"][key] = {"type": "integer"}
+            elif isinstance(value, float):
+                schema["properties"][key] = {"type": "number"}
+            elif isinstance(value, list):
+                schema["properties"][key] = {
+                    "type": "array",
+                    "items": convert_example_to_schema(value[0], _cache)
+                    if value
+                    else {},
+                }
+            elif isinstance(value, dict):
+                schema["properties"][key] = convert_example_to_schema(value, _cache)
+            else:
+                schema["properties"][key] = {"type": "string"}
+
+        _cache[cache_key] = schema
+        return schema
+
+    elif isinstance(example, list):
+        schema = {
+            "type": "array",
+            "items": convert_example_to_schema(example[0], _cache) if example else {},
+        }
+        _cache[cache_key] = schema
+        return schema
+
+    else:
+        # Primitive types - use type() for faster checking
+        type_map = {str: "string", bool: "boolean", int: "integer", float: "number"}
+        schema = {"type": type_map.get(type(example), "string")}
+        _cache[cache_key] = schema
+        return schema
+
+
 def main():
     env_vars_help = """
 Environment Variables:
@@ -109,10 +183,15 @@ Environment Variables:
         required=True,
         help="Natural language prompt",
     )
-    parser.add_argument(
+    schema_group = parser.add_mutually_exclusive_group(required=True)
+    schema_group.add_argument(
+        "-e",
+        "--example",
+        help='JSON example as a string (e.g., \'{"country": "France", "city": "Paris"}\')',
+    )
+    schema_group.add_argument(
         "-sf",
         "--schema-file",
-        required=True,
         help="Path to JSON schema file",
     )
     parser.add_argument(
@@ -128,8 +207,13 @@ Environment Variables:
     )
     args = parser.parse_args()
 
-    with open(args.schema_file, "r", encoding="utf-8") as f:
-        schema = json.load(f)
+    # Load schema from file or parse from string
+    if args.schema_file:
+        with open(args.schema_file, "r", encoding="utf-8") as f:
+            schema = json.load(f)
+    else:
+        example = json.loads(args.example)
+        schema = convert_example_to_schema(example)
 
     system_prompt = """
     You are a JSON API engine.

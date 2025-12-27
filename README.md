@@ -50,12 +50,56 @@ and receiving free-form text, you can do this:
 ask2api -p "Where is the capital of France?" -sf schema.json
 ```
 
+Or pass an example directly without a schema file:
+
+```bash
+ask2api -p "Where is the capital of France?" -e '{"country": "string", "city": "string"}'
+```
+
 And get a structured API response:
 
 ```json
 {
   "country": "France",
   "city": "Paris"
+}
+```
+
+For more complex structures with different data types:
+
+```bash
+ask2api -p "Analyze carbon element" -e '{
+  "symbol": "element symbol",
+  "atomic_number": 1234,
+  "atomic_weight": 12.34,
+  "is_metal": true,
+  "isotopes": ["name of the isotope"],
+  "properties": {
+    "melting_point": 1234.5,
+    "boiling_point": 2345.6,
+    "magnetic": true
+  }
+}'
+```
+
+Output:
+
+```
+{
+  "symbol": "C",
+  "atomic_number": 6,
+  "atomic_weight": 12.011,
+  "is_metal": false,
+  "isotopes": [
+    "C-12",
+    "C-13",
+    "C-14"
+  ],
+  "properties": {
+    "melting_point": 3550,
+    "boiling_point": 4827,
+    "magnetic": false
+  }
 }
 ```
 
