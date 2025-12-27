@@ -4,6 +4,7 @@ import json
 import mimetypes
 import os
 import requests
+from importlib.metadata import version, PackageNotFoundError
 from urllib.parse import urlparse
 
 API_KEY = os.getenv("OPENAI_API_KEY")
@@ -55,11 +56,22 @@ def prepare_image_content(image_path):
         }
 
 
+def get_version():
+    """Get the installed package version."""
+    try:
+        return version("ask2api")
+    except PackageNotFoundError:
+        return "dev"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--prompt", required=True)
     parser.add_argument("-sf", "--schema-file", required=True)
     parser.add_argument("-i", "--image")
+    parser.add_argument(
+        "-v", "--version", action="version", version=f"%(prog)s {get_version()}"
+    )
     args = parser.parse_args()
 
     with open(args.schema_file, "r", encoding="utf-8") as f:
