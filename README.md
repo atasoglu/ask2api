@@ -1,5 +1,10 @@
 # ask2api
 
+[![CI](https://github.com/atasoglu/ask2api/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/atasoglu/ask2api/actions/workflows/pre-commit.yml)
+[![PyPI version](https://badge.fury.io/py/ask2api.svg)](https://badge.fury.io/py/ask2api)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 `ask2api` is a minimal Python CLI tool that turns natural language prompts into structured API-style JSON responses using LLM.
 
 It allows you to define a JSON Schema and force the model to answer strictly in that format.
