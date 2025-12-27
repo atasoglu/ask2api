@@ -92,12 +92,39 @@ def get_version():
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--prompt", required=True)
-    parser.add_argument("-sf", "--schema-file", required=True)
-    parser.add_argument("-i", "--image")
+    env_vars_help = """
+Environment Variables:
+  OPENAI_API_KEY          OpenAI API key (required)
+  ASK2API_BASE_URL        Base API URL (default: https://api.openai.com/v1)
+  ASK2API_MODEL           Model name (default: gpt-4.1)
+  ASK2API_TEMPERATURE     Temperature setting (default: 0)
+"""
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=env_vars_help,
+    )
     parser.add_argument(
-        "-v", "--version", action="version", version=f"%(prog)s {get_version()}"
+        "-p",
+        "--prompt",
+        required=True,
+        help="Natural language prompt",
+    )
+    parser.add_argument(
+        "-sf",
+        "--schema-file",
+        required=True,
+        help="Path to JSON schema file",
+    )
+    parser.add_argument(
+        "-i",
+        "--image",
+        help="Path to image file or image URL",
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"%(prog)s {get_version()}",
     )
     args = parser.parse_args()
 
