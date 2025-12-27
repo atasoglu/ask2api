@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2025-12-27
+
+### Added
+- Example input support: `-e` option to accept JSON examples directly without schema files
+- Dynamic schema generation from JSON examples via `convert_example_to_schema` function
+- Support for complex nested structures with automatic type inference
+- Type hints mapping for common type names (string, int, float, bool, array, object)
+
+### Changed
+- Schema input is now optional when using `-e` flag
+- Made `-sf` and `-e` mutually exclusive options
+
 ## [0.3.0] - 2025-12-27
 
 ### Changed
