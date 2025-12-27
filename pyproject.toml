@@ -1,0 +1,29 @@
+[project]
+name = "ask2api"
+version = "0.1.0"
+description = "A minimal CLI tool that turns natural language into instant APIs."
+readme = "README.md"
+authors = [
+    {name = "Ahmet Atasoglu", email = "ahmetatasoglu98@gmail.com"},
+]
+requires-python = ">=3.9"
+dependencies = [
+    "requests",
+]
+
+[project.scripts]
+ask2api = "ask2api:main"
+
+[project.urls]
+Homepage = "https://github.com/atasoglu/ask2api"
+Repository = "https://github.com/atasoglu/ask2api.git"
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
