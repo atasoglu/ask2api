@@ -6,9 +6,36 @@ import os
 import requests
 from importlib.metadata import version, PackageNotFoundError
 from urllib.parse import urlparse
+from dataclasses import dataclass
 
 API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+ENV_VAR_PREFIX = "ASK2API_"
+
+
+@dataclass
+class Config:
+    base_url: str = "https://api.openai.com/v1"
+    model: str = "gpt-4.1"
+    temperature: float = 0
+
+    def __post_init__(self):
+        self.openai_url = f"{self.base_url}/chat/completions"
+
+    @classmethod
+    def from_env(cls, prefix: str = ENV_VAR_PREFIX):
+        """Get the configuration from the environment variables."""
+        return cls(
+            **dict(
+                filter(
+                    lambda x: x[1] is not None,
+                    dict(
+                        base_url=os.getenv(f"{prefix}BASE_URL"),
+                        model=os.getenv(f"{prefix}MODEL"),
+                        temperature=os.getenv(f"{prefix}TEMPERATURE"),
+                    ).items(),
+                ),
+            )
+        )
 
 
 def is_url(path):
@@ -97,8 +124,10 @@ def main():
         # Text-only content
         user_content = args.prompt
 
+    config = Config.from_env()
+
     payload = {
-        "model": "gpt-4.1",
+        "model": config.model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
@@ -107,12 +136,15 @@ def main():
             "type": "json_schema",
             "json_schema": {"name": "ask2api_schema", "schema": schema},
         },
-        "temperature": 0,
+        "temperature": config.temperature,
     }
 
-    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    }
 
-    r = requests.post(OPENAI_URL, headers=headers, json=payload)
+    r = requests.post(config.openai_url, headers=headers, json=payload)
     r.raise_for_status()
 
     result = r.json()["choices"][0]["message"]["content"]
