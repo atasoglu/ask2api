@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2025-12-28
+
+### Added
+- `generate_api_response` function to streamline API response generation using OpenAI format
+- `build_payload` function for better organization of request payload construction
+- `build_headers` function for better organization of request headers construction
+- System prompt constant variable for improved maintainability
+
+### Changed
+- Refactored main function to utilize new response generation logic for enhanced code clarity
+- Improved code organization and maintainability through function extraction
+
 ## [1.1.0] - 2025-12-28
 
 ### Added
