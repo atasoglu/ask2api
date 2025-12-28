@@ -23,6 +23,14 @@ TYPE_HINTS = {
     "object": "object",
     "dict": "object",
 }
+SYSTEM_PROMPT = """
+You are a JSON API engine.
+
+You must answer every user request as a valid API response that strictly
+follows the given JSON schema.
+
+Never return markdown, comments or extra text.
+"""
 
 
 @dataclass
@@ -47,7 +55,7 @@ class Config:
     def __post_init__(self):
         if not self.api_key:
             raise ValueError("API key is not set!")
-        self.openai_url = f"{self.base_url}/chat/completions"
+        self.url = f"{self.base_url}/chat/completions"
 
     @classmethod
     def get_env_vars_help(cls):
@@ -116,7 +124,7 @@ def encode_image(image_path):
 
 
 def prepare_image_content(image_path):
-    """Prepare image content for OpenAI API (either URL or base64 encoded)."""
+    """Prepare image content (either URL or base64 encoded)."""
     if is_url(image_path):
         return {"type": "image_url", "image_url": {"url": image_path}}
     else:
@@ -202,6 +210,44 @@ def read_text_file(path):
         return f.read().strip()
 
 
+def build_payload(user_content, schema, config):
+    """Build the payload for the OpenAI format."""
+    return {
+        "model": config.model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "ask2api_schema", "schema": schema},
+        },
+        "temperature": config.temperature,
+    }
+
+
+def build_headers(config):
+    """Build the headers for the OpenAI format."""
+    return {
+        "Authorization": f"Bearer {config.api_key}",
+        "Content-Type": "application/json",
+    }
+
+
+def generate_api_response(
+    user_content: str | list[dict],
+    schema: dict,
+    config: Config,
+) -> dict:
+    """Generate an API response using the OpenAI format."""
+    headers = build_headers(config)
+    payload = build_payload(user_content, schema, config)
+    response = requests.post(config.url, headers=headers, json=payload)
+    response.raise_for_status()
+    content = response.json()["choices"][0]["message"]["content"]
+    return json.loads(content)
+
+
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -261,15 +307,6 @@ def main():
         example = json.loads(example_str)
         schema = convert_example_to_schema(example)
 
-    system_prompt = """
-    You are a JSON API engine.
-
-    You must answer every user request as a valid API response that strictly
-    follows the given JSON schema.
-
-    Never return markdown, comments or extra text.
-    """
-
     # Build user message content
     if args.image:
         # Multimodal content: text + image
@@ -283,30 +320,9 @@ def main():
 
     config = Config.from_env()
 
-    payload = {
-        "model": config.model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ],
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {"name": "ask2api_schema", "schema": schema},
-        },
-        "temperature": config.temperature,
-    }
+    result = generate_api_response(user_content, schema, config)
 
-    headers = {
-        "Authorization": f"Bearer {config.api_key}",
-        "Content-Type": "application/json",
-    }
-
-    r = requests.post(config.openai_url, headers=headers, json=payload)
-    r.raise_for_status()
-
-    result = r.json()["choices"][0]["message"]["content"]
-    parsed_result = json.loads(result)
-    print(json.dumps(parsed_result, indent=2, ensure_ascii=False))
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
