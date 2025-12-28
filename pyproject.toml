@@ -1,6 +1,6 @@
 [project]
 name = "ask2api"
-version = "1.1.1"
+version = "1.1.2"
 description = "A minimal CLI tool that turns natural language into instant APIs."
 readme = "README.md"
 license = {text = "MIT"}
