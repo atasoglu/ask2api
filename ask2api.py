@@ -6,9 +6,8 @@ import os
 import requests
 from importlib.metadata import version, PackageNotFoundError
 from urllib.parse import urlparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field, fields
 
-API_KEY = os.getenv("OPENAI_API_KEY")
 ENV_VAR_PREFIX = "ASK2API_"
 TYPE_HINTS = {
     "string": "string",
@@ -28,25 +27,57 @@ TYPE_HINTS = {
 
 @dataclass
 class Config:
-    base_url: str = "https://api.openai.com/v1"
-    model: str = "gpt-4.1"
-    temperature: float = 0
+    api_key: str = field(
+        default=os.getenv("OPENAI_API_KEY"),
+        metadata={"help": "API key (required)"},
+    )
+    base_url: str = field(
+        default="https://api.openai.com/v1",
+        metadata={"help": "Base API URL"},
+    )
+    model: str = field(
+        default="gpt-4.1",
+        metadata={"help": "Model name"},
+    )
+    temperature: float = field(
+        default=0,
+        metadata={"help": "Temperature setting"},
+    )
 
     def __post_init__(self):
+        if not self.api_key:
+            raise ValueError("API key is not set!")
         self.openai_url = f"{self.base_url}/chat/completions"
 
     @classmethod
-    def from_env(cls, prefix: str = ENV_VAR_PREFIX):
+    def get_env_vars_help(cls):
+        longest = max(len(f.name) for f in fields(cls))
+
+        def field_help(f):
+            desc = f.metadata["help"]
+            default = getattr(cls, f.name) if f.name != "api_key" else None
+            return "\t".join(
+                [
+                    f"{ENV_VAR_PREFIX}{f.name.upper():<{longest}}",
+                    f"{desc} {f'(default: {default})' if default is not None else ''}",
+                ]
+            )
+
+        return "Environment Variables:\n" + "\n".join(
+            field_help(f) for f in fields(cls)
+        )
+
+    @classmethod
+    def from_env(cls):
         """Get the configuration from the environment variables."""
         return cls(
             **dict(
                 filter(
                     lambda x: x[1] is not None,
-                    dict(
-                        base_url=os.getenv(f"{prefix}BASE_URL"),
-                        model=os.getenv(f"{prefix}MODEL"),
-                        temperature=os.getenv(f"{prefix}TEMPERATURE"),
-                    ).items(),
+                    {
+                        name: os.getenv(ENV_VAR_PREFIX + name.upper())
+                        for name in cls.__annotations__
+                    }.items(),
                 ),
             )
         )
@@ -137,9 +168,9 @@ def convert_example_to_schema(example, _cache=None):
             elif isinstance(value, list):
                 schema["properties"][key] = {
                     "type": "array",
-                    "items": convert_example_to_schema(value[0], _cache)
-                    if value
-                    else {},
+                    "items": (
+                        convert_example_to_schema(value[0], _cache) if value else {}
+                    ),
                 }
             elif isinstance(value, dict):
                 schema["properties"][key] = convert_example_to_schema(value, _cache)
@@ -166,16 +197,9 @@ def convert_example_to_schema(example, _cache=None):
 
 
 def main():
-    env_vars_help = """
-Environment Variables:
-  OPENAI_API_KEY          OpenAI API key (required)
-  ASK2API_BASE_URL        Base API URL (default: https://api.openai.com/v1)
-  ASK2API_MODEL           Model name (default: gpt-4.1)
-  ASK2API_TEMPERATURE     Temperature setting (default: 0)
-"""
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=env_vars_help,
+        epilog=Config.get_env_vars_help(),
     )
     parser.add_argument(
         "-p",
@@ -251,7 +275,7 @@ Environment Variables:
     }
 
     headers = {
-        "Authorization": f"Bearer {API_KEY}",
+        "Authorization": f"Bearer {config.api_key}",
         "Content-Type": "application/json",
     }
 

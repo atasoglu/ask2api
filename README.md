@@ -30,10 +30,12 @@ Key features:
 pip install ask2api
 ```
 
-Set your OpenAI key:
+Set your API key:
 
 ```bash
-export OPENAI_API_KEY="your_api_key"
+export ASK2API_API_KEY="your_api_key"
+# Or you can pass OpenAI key
+# export OPENAI_API_KEY="your_api_key"
 ```
 
 ## Usage
@@ -65,7 +67,9 @@ And get a structured API response:
 }
 ```
 
-For more complex structures with different data types:
+<details>
+
+<summary>For more complex structures with different data types:</summary>
 
 ```bash
 ask2api -p "Analyze carbon element" -e '{
@@ -102,6 +106,8 @@ Output:
   }
 }
 ```
+
+</details>
 
 ### Vision modality
 
