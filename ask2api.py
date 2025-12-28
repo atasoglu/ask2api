@@ -196,22 +196,38 @@ def convert_example_to_schema(example, _cache=None):
         return schema
 
 
+def read_text_file(path):
+    """Read content from a text file."""
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=Config.get_env_vars_help(),
     )
-    parser.add_argument(
+    prompt_group = parser.add_mutually_exclusive_group(required=True)
+    prompt_group.add_argument(
         "-p",
         "--prompt",
-        required=True,
         help="Natural language prompt",
+    )
+    prompt_group.add_argument(
+        "-pf",
+        "--prompt-file",
+        help="Path to text file containing the prompt",
     )
     schema_group = parser.add_mutually_exclusive_group(required=True)
     schema_group.add_argument(
         "-e",
         "--example",
         help='JSON example as a string (e.g., \'{"country": "France", "city": "Paris"}\')',
+    )
+    schema_group.add_argument(
+        "-ef",
+        "--example-file",
+        help="Path to text file containing JSON example",
     )
     schema_group.add_argument(
         "-sf",
@@ -231,12 +247,18 @@ def main():
     )
     args = parser.parse_args()
 
+    # Get prompt from file or argument
+    prompt = read_text_file(args.prompt_file) if args.prompt_file else args.prompt
+
     # Load schema from file or parse from string
     if args.schema_file:
         with open(args.schema_file, "r", encoding="utf-8") as f:
             schema = json.load(f)
     else:
-        example = json.loads(args.example)
+        example_str = (
+            read_text_file(args.example_file) if args.example_file else args.example
+        )
+        example = json.loads(example_str)
         schema = convert_example_to_schema(example)
 
     system_prompt = """
@@ -252,12 +274,12 @@ def main():
     if args.image:
         # Multimodal content: text + image
         user_content = [
-            {"type": "text", "text": args.prompt},
+            {"type": "text", "text": prompt},
             prepare_image_content(args.image),
         ]
     else:
         # Text-only content
-        user_content = args.prompt
+        user_content = prompt
 
     config = Config.from_env()
 
