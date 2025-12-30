@@ -117,6 +117,27 @@ You can also analyze images and get structured JSON responses:
 ask2api -p "Where is this place?" -sf schema.json -i https://upload.wikimedia.org/wikipedia/commons/6/64/Lesdeuxmagots.jpg
 ```
 
+<details>
+
+<summary><b>Note:</b> Some API providers may not accept image URLs...</summary>
+
+...and require images to be provided as base64-encoded data (i.e., a local file). If you encounter problems using an image URL, download the image locally and pass the file path, then `ask2api` will base64-encode local files automatically.
+
+Example (download with curl and run):
+
+```bash
+curl -sSL -o place.jpg "https://upload.wikimedia.org/wikipedia/commons/6/64/Lesdeuxmagots.jpg"
+ask2api -p "Where is this place?" -sf schema.json -i ./place.jpg
+```
+
+Or download with wget:
+
+```bash
+wget -O place.jpg "https://upload.wikimedia.org/wikipedia/commons/6/64/Lesdeuxmagots.jpg"
+```
+
+</details>
+
 ## How it works
 
 1. You define the desired output structure using a JSON Schema.

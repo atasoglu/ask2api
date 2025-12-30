@@ -250,6 +250,7 @@ def generate_api_response(
 
 def main():
     parser = argparse.ArgumentParser(
+        description="Ask a language model to return a JSON object that strictly follows a provided JSON schema.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=Config.get_env_vars_help(),
     )
