@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2025-12-30
+
+### Added
+- **README:** Note warning that some API providers may require base64-encoded images (local files) instead of image URLs; added example commands (curl/wget) to download images and use local files with `ask2api`.
+
 ## [1.1.2] - 2025-12-28
 
 ### Fixed
