@@ -38,6 +38,46 @@ export ASK2API_API_KEY="your_api_key"
 # export OPENAI_API_KEY="your_api_key"
 ```
 
+## Provider Support
+
+`ask2api` supports both OpenAI (and OpenAI-compatible) and Anthropic (Claude) models.
+
+### Using OpenAI (default)
+
+By default, `ask2api` uses OpenAI. No additional configuration is needed:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+ask2api -p "What is 2+2?" -e '{"result": 1}'
+```
+
+### Using Anthropic Claude
+
+To use Anthropic's Claude models, set the provider explicitly:
+
+```bash
+export ASK2API_PROVIDER="anthropic"
+export ANTHROPIC_API_KEY="sk-ant-..."
+ask2api -p "What is the capital of France?" -e '{"country": "string", "city": "string"}'
+```
+
+You can also customize the model:
+
+```bash
+export ASK2API_PROVIDER="anthropic"
+export ASK2API_API_KEY="sk-ant-..."
+export ASK2API_MODEL="claude-opus-4-5"
+ask2api -p "Analyze carbon" -e '{"symbol": "string", "atomic_number": 1}'
+```
+
+Anthropic's Claude models support vision as well:
+
+```bash
+export ASK2API_PROVIDER="anthropic"
+export ANTHROPIC_API_KEY="sk-ant-..."
+ask2api -p "What's in this image?" -e '{"description": "string"}' -i photo.jpg
+```
+
 ## Usage
 
 ### Text-only prompts
@@ -141,12 +181,14 @@ wget -O place.jpg "https://upload.wikimedia.org/wikipedia/commons/6/64/Lesdeuxma
 ## How it works
 
 1. You define the desired output structure using a JSON Schema.
-2. The schema is passed to the model using OpenAI's `json_schema` structured output format.
+2. The schema is passed to the model:
+   - For OpenAI: using the `json_schema` structured output format
+   - For Anthropic: using tool calling with forced tool use
 3. The system prompt enforces strict JSON-only responses.
 4. For vision tasks, images are automatically encoded (base64 for local files) or passed as URLs.
 5. The CLI prints the API-ready JSON output.
 
-The model is treated as a deterministic API function.
+The model is treated as a deterministic API function, regardless of provider.
 
 ## Example schema
 

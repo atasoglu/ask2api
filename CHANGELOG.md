@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-14
+
+### Added
+- **Anthropic API support:** `ask2api` now supports Anthropic's Claude models (Opus 4.6, Sonnet 4.5, Haiku 4.5) in addition to OpenAI
+- **Provider selection:** New `ASK2API_PROVIDER` environment variable to explicitly choose between `openai` and `anthropic`
+- **Provider-agnostic API key:** New `ASK2API_API_KEY` environment variable that works with any provider
+- **Anthropic-specific functions:**
+  - `convert_schema_to_anthropic_tool()` - Converts JSON Schema to Anthropic tool definition
+  - `build_anthropic_payload()` - Builds API payload using tool calling format
+  - `build_anthropic_headers()` - Sets Anthropic-specific headers (x-api-key, anthropic-version)
+  - `parse_anthropic_response()` - Extracts structured output from tool_use response
+  - `prepare_anthropic_image_content()` - Handles Anthropic's image format
+  - `convert_content_for_anthropic()` - Converts multimodal content between formats
+- **Provider constants:** `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`, `OPENAI_DEFAULT_MODEL`, `ANTHROPIC_DEFAULT_MODEL`, `ANTHROPIC_VERSION`
+- **Intelligent API key fallback:** Automatically falls back to `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` based on selected provider
+- **Vision support for Anthropic:** Image analysis works with both URL and base64-encoded local files
+- **Enhanced help text:** CLI help now shows provider-specific environment variables
+
+### Changed
+- **Config class refactored:** Added `provider` field with automatic provider-specific defaults
+- **Provider routing:** `generate_api_response()` now routes between OpenAI and Anthropic based on configuration
+- **Image handling:** `prepare_image_content()` now accepts provider parameter for format-specific handling
+- **Function naming:** Renamed OpenAI-specific functions for clarity:
+  - `build_payload()` → `build_openai_payload()`
+  - `build_headers()` → `build_openai_headers()`
+- **Response parsing:** Extracted OpenAI response parsing into `parse_openai_response()` function
+- **Default provider:** Defaults to `openai` when no provider is specified (100% backward compatible)
+- **Documentation:** Updated README with comprehensive provider support guide and examples
+
+### Technical Details
+- Anthropic support uses tool calling to achieve structured output (no native `json_schema` format)
+- Single-file architecture maintained (~330 → 501 lines)
+- Zero new dependencies (still only `requests`)
+- Clean separation between OpenAI and Anthropic code paths
+
 ## [1.1.3] - 2025-12-30
 
 ### Added

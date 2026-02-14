@@ -23,6 +23,11 @@ TYPE_HINTS = {
     "object": "object",
     "dict": "object",
 }
+OPENAI_BASE_URL = "https://api.openai.com/v1"
+ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1"
+OPENAI_DEFAULT_MODEL = "gpt-4.1"
+ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-4-5"
+ANTHROPIC_VERSION = "2023-06-01"  # Vision support available in this version and later
 SYSTEM_PROMPT = """
 You are a JSON API engine.
 
@@ -35,27 +40,55 @@ Never return markdown, comments or extra text.
 
 @dataclass
 class Config:
-    api_key: str = field(
-        default=os.getenv("OPENAI_API_KEY"),
+    api_key: str | None = field(
+        default=None,
         metadata={"help": "API key (required)"},
     )
-    base_url: str = field(
-        default="https://api.openai.com/v1",
+    base_url: str | None = field(
+        default=None,
         metadata={"help": "Base API URL"},
     )
-    model: str = field(
-        default="gpt-4.1",
+    model: str | None = field(
+        default=None,
         metadata={"help": "Model name"},
     )
     temperature: float = field(
         default=0,
         metadata={"help": "Temperature setting"},
     )
+    provider: str | None = field(
+        default=None,
+        metadata={"help": "API provider (openai or anthropic)"},
+    )
 
     def __post_init__(self):
+        # Default provider to openai if not specified (backward compatibility)
+        if not self.provider:
+            self.provider = "openai"
+
+        # Validate provider
+        if self.provider not in ["openai", "anthropic"]:
+            raise ValueError(
+                f"Invalid provider: {self.provider}. Must be 'openai' or 'anthropic'"
+            )
+
+        # Apply provider-specific defaults
+        if self.provider == "openai":
+            if not self.base_url:
+                self.base_url = OPENAI_BASE_URL
+            if not self.model:
+                self.model = OPENAI_DEFAULT_MODEL
+            self.url = f"{self.base_url}/chat/completions"
+        else:  # anthropic
+            if not self.base_url:
+                self.base_url = ANTHROPIC_BASE_URL
+            if not self.model:
+                self.model = ANTHROPIC_DEFAULT_MODEL
+            self.url = f"{self.base_url}/messages"
+
+        # Validate API key
         if not self.api_key:
             raise ValueError("API key is not set!")
-        self.url = f"{self.base_url}/chat/completions"
 
     @classmethod
     def get_env_vars_help(cls):
@@ -63,7 +96,15 @@ class Config:
 
         def field_help(f):
             desc = f.metadata["help"]
-            default = getattr(cls, f.name) if f.name != "api_key" else None
+            # Don't show defaults for api_key or fields with None defaults
+            if (
+                f.name == "api_key"
+                or f.default is None
+                or (hasattr(f.default, "default") and f.default.default is None)
+            ):
+                default = None
+            else:
+                default = getattr(cls, f.name, None)
             return "\t".join(
                 [
                     f"{ENV_VAR_PREFIX}{f.name.upper():<{longest}}",
@@ -71,24 +112,50 @@ class Config:
                 ]
             )
 
-        return "Environment Variables:\n" + "\n".join(
+        help_text = "Environment Variables:\n" + "\n".join(
             field_help(f) for f in fields(cls)
         )
+
+        # Add provider-specific API key info
+        help_text += (
+            "\n\nProvider-specific API keys (fallback if ASK2API_API_KEY not set):"
+        )
+        help_text += f"\n\t{'ANTHROPIC_API_KEY':<{longest}}\tAnthropic API key"
+        help_text += f"\n\t{'OPENAI_API_KEY':<{longest}}\tOpenAI API key"
+
+        return help_text
 
     @classmethod
     def from_env(cls):
         """Get the configuration from the environment variables."""
-        return cls(
-            **dict(
-                filter(
-                    lambda x: x[1] is not None,
-                    {
-                        name: os.getenv(ENV_VAR_PREFIX + name.upper())
-                        for name in cls.__annotations__
-                    }.items(),
-                ),
+        # Load config from ASK2API_* environment variables
+        config_dict = dict(
+            filter(
+                lambda x: x[1] is not None,
+                {
+                    name: os.getenv(ENV_VAR_PREFIX + name.upper())
+                    for name in cls.__annotations__
+                }.items(),
             )
         )
+
+        # Get provider (defaults to openai in __post_init__ if not specified)
+        provider = config_dict.get("provider", os.getenv("ASK2API_PROVIDER", "openai"))
+
+        # Handle API key fallback based on provider
+        if "api_key" not in config_dict or config_dict["api_key"] is None:
+            # Check ASK2API_API_KEY first
+            api_key = os.getenv("ASK2API_API_KEY")
+            if not api_key:
+                # Fallback to provider-specific key
+                if provider == "anthropic":
+                    api_key = os.getenv("ANTHROPIC_API_KEY")
+                else:  # openai or default
+                    api_key = os.getenv("OPENAI_API_KEY")
+            config_dict["api_key"] = api_key
+
+        config_dict["provider"] = provider
+        return cls(**config_dict)
 
 
 def is_url(path):
@@ -123,11 +190,35 @@ def encode_image(image_path):
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 
-def prepare_image_content(image_path):
-    """Prepare image content (either URL or base64 encoded)."""
+def prepare_image_content(image_path, provider="openai"):
+    """Prepare image content in OpenAI format (will be converted for Anthropic later if needed)."""
     if is_url(image_path):
-        return {"type": "image_url", "image_url": {"url": image_path}}
+        if provider == "anthropic":
+            # For Anthropic with URLs, download and convert to data URL
+            # since Anthropic doesn't support direct image URLs
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
+            response = requests.get(image_path, headers=headers)
+            response.raise_for_status()
+            image_data = base64.b64encode(response.content).decode("utf-8")
+
+            # Get mime type
+            content_type = response.headers.get("content-type", "")
+            if content_type.startswith("image/"):
+                mime_type = content_type
+            else:
+                mime_type = get_image_mime_type(image_path)
+
+            return {
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime_type};base64,{image_data}"},
+            }
+        else:
+            # OpenAI supports direct URLs
+            return {"type": "image_url", "image_url": {"url": image_path}}
     else:
+        # Local file - encode to base64 for both providers
         base64_image = encode_image(image_path)
         mime_type = get_image_mime_type(image_path)
         return {
@@ -210,7 +301,7 @@ def read_text_file(path):
         return f.read().strip()
 
 
-def build_payload(user_content, schema, config):
+def build_openai_payload(user_content, schema, config):
     """Build the payload for the OpenAI format."""
     return {
         "model": config.model,
@@ -226,7 +317,7 @@ def build_payload(user_content, schema, config):
     }
 
 
-def build_headers(config):
+def build_openai_headers(config):
     """Build the headers for the OpenAI format."""
     return {
         "Authorization": f"Bearer {config.api_key}",
@@ -234,18 +325,155 @@ def build_headers(config):
     }
 
 
+def parse_openai_response(response_json: dict) -> dict:
+    """Parse OpenAI API response to extract JSON content."""
+    content = response_json["choices"][0]["message"]["content"]
+    return json.loads(content)
+
+
+def convert_schema_to_anthropic_tool(schema: dict) -> dict:
+    """Convert JSON Schema to Anthropic tool definition."""
+    return {
+        "name": "format_response",
+        "description": "Format the API response strictly according to the provided JSON schema.",
+        "input_schema": schema,
+    }
+
+
+def prepare_anthropic_image_content(image_path):
+    """Prepare image content for Anthropic API (different format from OpenAI).
+
+    Note: Anthropic API only supports base64-encoded images, not direct URLs.
+    If a URL is provided, we download and convert it to base64.
+    """
+    if is_url(image_path):
+        # Download the image from URL and convert to base64
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        response = requests.get(image_path, headers=headers)
+        response.raise_for_status()
+        image_data = base64.b64encode(response.content).decode("utf-8")
+
+        # Try to get mime type from response headers, fallback to guessing from URL
+        content_type = response.headers.get("content-type", "")
+        if content_type.startswith("image/"):
+            mime_type = content_type
+        else:
+            mime_type = get_image_mime_type(image_path)
+
+        return {
+            "type": "image",
+            "source": {"type": "base64", "media_type": mime_type, "data": image_data},
+        }
+    else:
+        return {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": get_image_mime_type(image_path),
+                "data": encode_image(image_path),
+            },
+        }
+
+
+def convert_content_for_anthropic(user_content):
+    """Convert OpenAI-style multimodal content to Anthropic format."""
+    anthropic_content = []
+    for item in user_content:
+        if item["type"] == "text":
+            anthropic_content.append({"type": "text", "text": item["text"]})
+        elif item["type"] == "image_url":
+            # Extract image path/URL from OpenAI format
+            image_url = item["image_url"]["url"]
+            # Check if it's a data URL or regular URL/path
+            if image_url.startswith("data:"):
+                # Extract base64 data and mime type from data URL
+                # Format: data:image/jpeg;base64,/9j/4AAQ...
+                header, data = image_url.split(",", 1)
+                mime_type = header.split(";")[0].split(":")[1]
+                anthropic_content.append(
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mime_type,
+                            "data": data,
+                        },
+                    }
+                )
+            else:
+                # Regular URL
+                anthropic_content.append(
+                    {"type": "image", "source": {"type": "url", "url": image_url}}
+                )
+    return anthropic_content
+
+
+def build_anthropic_payload(user_content, schema, config):
+    """Build the payload for the Anthropic format."""
+    tool = convert_schema_to_anthropic_tool(schema)
+
+    if isinstance(user_content, str):
+        messages = [{"role": "user", "content": user_content}]
+    else:
+        # Convert image format from OpenAI style to Anthropic style
+        messages = [
+            {"role": "user", "content": convert_content_for_anthropic(user_content)}
+        ]
+
+    return {
+        "model": config.model,
+        "max_tokens": 4096,  # Required by Anthropic
+        "system": SYSTEM_PROMPT.strip(),
+        "messages": messages,
+        "tools": [tool],
+        "tool_choice": {"type": "tool", "name": "format_response"},
+        "temperature": config.temperature,
+    }
+
+
+def build_anthropic_headers(config):
+    """Build the headers for the Anthropic format."""
+    return {
+        "x-api-key": config.api_key,
+        "anthropic-version": ANTHROPIC_VERSION,
+        "content-type": "application/json",
+    }
+
+
+def parse_anthropic_response(response_json: dict) -> dict:
+    """Parse Anthropic API response to extract tool use result."""
+    for block in response_json["content"]:
+        if block["type"] == "tool_use" and block["name"] == "format_response":
+            return block["input"]
+    raise ValueError("No valid response found in Anthropic output")
+
+
 def generate_api_response(
     user_content: str | list[dict],
     schema: dict,
     config: Config,
 ) -> dict:
-    """Generate an API response using the OpenAI format."""
-    headers = build_headers(config)
-    payload = build_payload(user_content, schema, config)
-    response = requests.post(config.url, headers=headers, json=payload)
-    response.raise_for_status()
-    content = response.json()["choices"][0]["message"]["content"]
-    return json.loads(content)
+    """Generate an API response using the configured provider."""
+    if config.provider == "anthropic":
+        headers = build_anthropic_headers(config)
+        payload = build_anthropic_payload(user_content, schema, config)
+        response = requests.post(config.url, headers=headers, json=payload)
+        response.raise_for_status()
+        response_json = response.json()
+
+        # Debug: Print response if there's an error
+        if "error" in response_json:
+            raise ValueError(f"Anthropic API error: {response_json['error']}")
+
+        return parse_anthropic_response(response_json)
+    else:  # openai
+        headers = build_openai_headers(config)
+        payload = build_openai_payload(user_content, schema, config)
+        response = requests.post(config.url, headers=headers, json=payload)
+        response.raise_for_status()
+        return parse_openai_response(response.json())
 
 
 def main():
@@ -308,18 +536,18 @@ def main():
         example = json.loads(example_str)
         schema = convert_example_to_schema(example)
 
+    config = Config.from_env()
+
     # Build user message content
     if args.image:
         # Multimodal content: text + image
         user_content = [
             {"type": "text", "text": prompt},
-            prepare_image_content(args.image),
+            prepare_image_content(args.image, config.provider),
         ]
     else:
         # Text-only content
         user_content = prompt
-
-    config = Config.from_env()
 
     result = generate_api_response(user_content, schema, config)
 
